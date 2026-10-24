@@ -1,0 +1,74 @@
+{
+ "scale=0.01|PG": {
+  "mean_return_over_run": 0.7212093821975788,
+  "mean_return_sem": 0.0022003301148255648,
+  "final_return": 0.9954261179731798,
+  "median_steps_to_0.9": 200.5
+ },
+ "scale=0.01|DG eta=1": {
+  "mean_return_over_run": 0.44797337021963723,
+  "mean_return_sem": 0.0031939589751248743,
+  "final_return": 0.9992911916655209,
+  "median_steps_to_0.9": 401.0
+ },
+ "scale=0.01|DG whitened": {
+  "mean_return_over_run": 0.47800040981302033,
+  "mean_return_sem": 0.0034168299157774722,
+  "final_return": 0.9997131984931602,
+  "median_steps_to_0.9": 397.5
+ },
+ "scale=0.01|DG eta=scale": {
+  "mean_return_over_run": 0.466173922901293,
+  "mean_return_sem": 0.003403154302262879,
+  "final_return": 0.9996283903694225,
+  "median_steps_to_0.9": 408.0
+ },
+ "scale=1|PG": {
+  "mean_return_over_run": 0.7212093821975787,
+  "mean_return_sem": 0.0022003301148255565,
+  "final_return": 0.9954261179731798,
+  "median_steps_to_0.9": 200.5
+ },
+ "scale=1|DG eta=1": {
+  "mean_return_over_run": 0.466173922901293,
+  "mean_return_sem": 0.0034031543022628756,
+  "final_return": 0.9996283903694225,
+  "median_steps_to_0.9": 408.0
+ },
+ "scale=1|DG whitened": {
+  "mean_return_over_run": 0.4780004587843584,
+  "mean_return_sem": 0.0034168301110102236,
+  "final_return": 0.9997131989395743,
+  "median_steps_to_0.9": 397.5
+ },
+ "scale=1|DG eta=scale": {
+  "mean_return_over_run": 0.466173922901293,
+  "mean_return_sem": 0.0034031543022628756,
+  "final_return": 0.9996283903694225,
+  "median_steps_to_0.9": 408.0
+ },
+ "scale=100|PG": {
+  "mean_return_over_run": 0.7212093821975787,
+  "mean_return_sem": 0.0022003301148255596,
+  "final_return": 0.9954261179731798,
+  "median_steps_to_0.9": 200.5
+ },
+ "scale=100|DG eta=1": {
+  "mean_return_over_run": 0.5515719418461786,
+  "mean_return_sem": 0.00326563463979129,
+  "final_return": 0.9997173607128097,
+  "median_steps_to_0.9": 339.0
+ },
+ "scale=100|DG whitened": {
+  "mean_return_over_run": 0.4780004592740723,
+  "mean_return_sem": 0.0034168301129625426,
+  "final_return": 0.9997131989440389,
+  "median_steps_to_0.9": 397.5
+ },
+ "scale=100|DG eta=scale": {
+  "mean_return_over_run": 0.4661739229012931,
+  "mean_return_sem": 0.0034031543022628756,
+  "final_return": 0.9996283903694225,
+  "median_steps_to_0.9": 408.0
+ }
+}

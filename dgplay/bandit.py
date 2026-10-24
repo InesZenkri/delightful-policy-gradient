@@ -33,19 +33,31 @@ def dg_gate(advantage: float, prob: float, eta: float = 1.0) -> float:
     return float(1.0 / (1.0 + np.exp(-chi / eta)))
 
 
+def whiten_chi(chi: np.ndarray, eps: float = 1e-8) -> np.ndarray:
+    """Whiten a batch of delights: (chi - mean) / (std + eps), as the paper suggests
+    (arXiv:2603.14608, Section 2.2) when the scale of chi varies. Invariant to rescaling
+    advantages by a constant. A single-sample batch maps to 0, i.e. gate 0.5."""
+    chi = np.asarray(chi, dtype=float)
+    return (chi - chi.mean()) / (chi.std() + eps)
+
+
 def pg_direction(logits, actions, advantages) -> np.ndarray:
-    d = np.zeros_like(logits, dtype=float)
-    for a, u in zip(actions, advantages):
-        d += u * grad_log_pi(logits, a)
-    return d
-
-
-def dg_direction(logits, actions, advantages, eta: float = 1.0) -> np.ndarray:
     pi = softmax(logits)
-    d = np.zeros_like(logits, dtype=float)
-    for a, u in zip(actions, advantages):
-        d += dg_gate(u, pi[a], eta) * u * grad_log_pi(logits, a)
-    return d
+    coef = np.asarray(advantages, dtype=float)
+    # sum_a coef*(onehot(a) - pi), vectorized
+    return np.bincount(actions, weights=coef, minlength=len(logits)) - pi * coef.sum()
+
+
+def dg_direction(logits, actions, advantages, eta: float = 1.0, whiten: bool = False) -> np.ndarray:
+    pi = softmax(logits)
+    actions = np.asarray(actions)
+    adv = np.asarray(advantages, dtype=float)
+    chi = adv * (-np.log(np.maximum(pi[actions], 1e-12)))
+    if whiten:
+        chi = whiten_chi(chi)
+    w = 1.0 / (1.0 + np.exp(-chi / eta))
+    coef = w * adv
+    return np.bincount(actions, weights=coef, minlength=len(logits)) - pi * coef.sum()
 
 
 def advantage_ema_update(baseline: float, rewards, decay: float = 0.9) -> float:
@@ -70,7 +82,8 @@ class BanditEnv:
 
 def run_agent(means, method: str, steps: int = 400, batch: int = 8, lr: float = 0.5,
               eta: float = 1.0, seed: int = 0, baseline_decay: float = 0.9,
-              normalize: bool = False, fixed_baseline: float | None = None):
+              normalize: bool = False, fixed_baseline: float | None = None,
+              whiten: bool = False):
     """Run one agent. Returns dict with per-step policy probs and expected reward.
 
     method: "pg" or "dg". Advantage = reward - baseline, where baseline is an EMA of batch
@@ -91,10 +104,13 @@ def run_agent(means, method: str, steps: int = 400, batch: int = 8, lr: float = 
         probs_hist.append(pi.copy())
         exp_reward.append(float(pi @ means))
         actions = rng.choice(env.k, size=batch, p=pi)
-        rewards = np.array([env.pull(a) for a in actions])
+        # same rng stream as [env.pull(a) for a in actions], vectorized
+        rewards = (env.rng.random(batch) < means[actions]).astype(float)
         adv = rewards - baseline
-        direction = (dg_direction if method == "dg" else pg_direction)(
-            logits, actions, adv, *(([eta]) if method == "dg" else []))
+        if method == "dg":
+            direction = dg_direction(logits, actions, adv, eta, whiten)
+        else:
+            direction = pg_direction(logits, actions, adv)
         if normalize:
             n = np.linalg.norm(direction)
             logits = logits + (lr * direction / n if n > 0 else 0.0)
