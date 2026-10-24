@@ -128,3 +128,44 @@ def test_dg_has_upward_bias_on_rare_arm_with_noisy_equal_arms():
             exp_pg += pi[a] * pr * pg_direction(logits, [a], [r - 0.5])
     assert np.allclose(exp_pg, 0, atol=1e-12)
     assert exp_dg[4] > 1e-3          # rare arm logit pushed up
+
+
+def test_whiten_chi_standardizes_batch():
+    from dgplay import whiten_chi
+    chi = np.array([0.3, -1.2, 4.5, 0.0, 2.2])
+    w = whiten_chi(chi)
+    assert np.isclose(w.mean(), 0.0, atol=1e-9)
+    assert np.isclose(w.std(), 1.0, atol=1e-6)
+
+
+def test_whiten_chi_single_sample_maps_to_zero_gate():
+    from dgplay import whiten_chi
+    assert np.allclose(whiten_chi(np.array([3.7])), 0.0)   # -> sigmoid(0) = 0.5
+
+
+def test_whitened_dg_direction_invariant_to_advantage_scaling():
+    # Whitening removes the reward/advantage units from the gate: scaling every advantage
+    # by c scales the direction by exactly c, for any eta.
+    logits = np.array([0.4, -0.1, 2.0, -1.0])
+    rng = np.random.default_rng(0)
+    actions = rng.integers(0, 4, size=16)
+    adv = rng.normal(size=16)
+    for eta in (0.5, 1.0, 3.0):
+        d1 = dg_direction(logits, actions, adv, eta, whiten=True)
+        d2 = dg_direction(logits, actions, 100.0 * adv, eta, whiten=True)
+        assert np.allclose(d2, 100.0 * d1)
+    # without whitening this is false (the gate saturates)
+    d1 = dg_direction(logits, actions, adv, 1.0, whiten=False)
+    d2 = dg_direction(logits, actions, 100.0 * adv, 1.0, whiten=False)
+    assert not np.allclose(d2, 100.0 * d1)
+
+
+def test_dg_direction_unwhitened_still_matches_gate_formula():
+    logits = np.array([0.4, -0.1, 2.0, -1.0])
+    actions = [0, 2, 2]
+    adv = [0.7, -0.3, 0.1]
+    pi = softmax(logits)
+    expected = np.zeros(4)
+    for a, u in zip(actions, adv):
+        expected += dg_gate(u, pi[a], 1.0) * u * grad_log_pi(logits, a)
+    assert np.allclose(dg_direction(logits, actions, adv, 1.0, whiten=False), expected)
