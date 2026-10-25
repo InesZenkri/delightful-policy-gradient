@@ -1,11 +1,11 @@
 # Delightful Policy Gradient: a small bandit playground
 
-A small NumPy playground that compares plain policy gradient (REINFORCE) with the **Delightful Policy Gradient (DG)** from:
+A small playground (NumPy bandits, one PyTorch experiment) that compares plain policy gradient (REINFORCE) with the **Delightful Policy Gradient (DG)** from:
 
 > Ian Osband (Google DeepMind), *Delightful Policy Gradient*, arXiv:2603.14608 (March 2026), accepted at the Reinforcement Learning Journal / RLC 2026.
 > https://arxiv.org/abs/2603.14608
 
-This is an independent, small-scale implementation written from the paper's Algorithm 1. **It is not a reproduction of the paper's experiments** and is not affiliated with the author or Google. The paper's results use much larger setups (MNIST, transformer sequence tasks, 28 DeepMind Control Suite environments at 10M steps), none of which are run here.
+This is an independent, small-scale implementation written from the paper's Algorithm 1. **It is not a reproduction of the paper's experiments** and is not affiliated with the author or Google. The paper's larger setups (transformer sequence tasks, 28 DeepMind Control Suite environments at 10M steps) are not run here. Its MNIST diagnostic (Section 3) is run at the paper's configuration, with 5 seeds instead of 100 (result 7 below).
 
 ## The method in one paragraph
 
@@ -27,12 +27,14 @@ A rare action with positive advantage (a "breakthrough") keeps almost its full w
 | `dgplay/bandit.py` | Softmax-policy K-armed bandit, PG and DG updates, optional unit-norm ("normalized") steps, optional delight whitening |
 | `dgplay/contextual.py` | Synthetic 10-class contextual bandit with a linear softmax policy (reward = correct class) |
 | `dgplay/continuous.py` | 1-D continuous-action bandit with a Gaussian policy (density-based surprisal, clipped log-density) |
+| `dgplay/mnist.py` | MNIST as a one-step contextual bandit, two-layer ReLU MLP policy in PyTorch (the paper's Section 3 setup) |
 | `scripts/make_demo.py` | Side-by-side animated demo (`docs/demo.gif`) |
 | `scripts/compare.py` | Multi-seed PG vs DG over three bandit settings, optionally with normalized steps |
 | `scripts/symmetric_normalized.py` | One-correct-arm bandit with normalized steps (my reading of the paper's symmetric-bandit setup) |
 | `scripts/compare_contextual.py` | PG vs DG vs supervised cross-entropy on the synthetic contextual bandit |
 | `scripts/sweep_eta_baseline.py` | Sweep of DG's temperature eta and the EMA baseline strength in two bandit settings |
 | `scripts/compare_continuous.py` | PG vs DG with clipped, whitened, and retuned delight on the continuous bandit at three reward scales |
+| `scripts/compare_mnist.py` | PG vs DG vs supervised cross-entropy on MNIST; one (method, seed) per invocation, then `--plot` |
 | `tests/` | Finite-difference gradient checks, gate formulas, and behavior tests |
 
 ## Run it
@@ -48,13 +50,15 @@ PYTHONPATH=. python scripts/compare.py --normalize
 PYTHONPATH=. python scripts/compare_contextual.py
 PYTHONPATH=. python scripts/sweep_eta_baseline.py     # about 30 s on a CPU
 PYTHONPATH=. python scripts/compare_continuous.py     # about 20 s on a CPU
+PYTHONPATH=. python scripts/compare_mnist.py --method dg --seed 0   # one run, about 10 s on a CPU
+PYTHONPATH=. python scripts/compare_mnist.py --plot                 # aggregate + figure
 ```
 
-Everything runs on CPU with NumPy and Matplotlib.
+Everything runs on CPU. The bandit experiments need only NumPy and Matplotlib; the MNIST experiment also needs PyTorch (the CPU wheel is fine). MNIST is downloaded once (about 10 MB) into `data/mnist/` on first use.
 
 ## Results from this prototype
 
-All numbers come from `docs/results*.json`, produced by the scripts above. Seeds: 30 for the original bandit runs, 10 for the contextual task and the sweep, 20 for the continuous runs. One configuration per setting, no tuning beyond the learning rates shown.
+All numbers come from `docs/results*.json`, produced by the scripts above. Seeds: 30 for the original bandit runs, 10 for the contextual task and the sweep, 20 for the continuous runs, 5 for MNIST. One configuration per setting, no tuning beyond the learning rates shown.
 
 | Setting | PG | DG (eta=1) | Takeaway |
 | --- | --- | --- | --- |
@@ -64,6 +68,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 | Synthetic contextual bandit | ~0.67 accuracy | ~0.67 (+0.002 to 0.007 over PG) | roughly tied, DG slightly ahead |
 | Eta/baseline sweep (normalized) | solves both scenarios | symmetric: robust; noisy: stall unless eta >= 4 | stall is in the gate, not the baseline |
 | Continuous 1-D bandit | identical at any reward scale | changes with reward scale; whitening fixes that | whitening makes eta unit-free, not faster |
+| MNIST contextual bandit (MLP) | 4.1% final test error | 3.4% (supervised CE: 2.9%) | DG ahead at every checkpoint; closes about 60% of PG's gap to CE |
 
 ![Demo](docs/demo_final.png)
 
@@ -83,15 +88,19 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ![continuous whitening](docs/continuous_whitening.png)
 
+**7. MNIST as a one-step contextual bandit (`docs/mnist_curve.png`, 5 seeds).** This is the paper's own diagnostic (its Section 3), run at the paper's configuration: the learner sees an image, samples a digit from its policy, and gets reward 1 only if the sample is correct - the label is never revealed. Two-layer ReLU MLP (hidden width 100), Adam lr 1e-3, batches of 100, 10,000 episodes, constant baseline b = 0.5, eta = 1. The only deviation from the paper is 5 seeds instead of 100, and test error is measured on a fixed 2,000-image subset of the test set. Final test error: 3.4% (+- 0.1 SE) for DG, 4.1% (+- 0.1) for PG, 2.9% (+- 0.0) for supervised cross-entropy, which sees the labels and is only a reference. DG was below PG's mean at every checkpoint, and below PG on every individual seed at 10,000 episodes (2.9 to 3.8% versus 3.8 to 4.2%). DG closes about 60% of PG's gap to cross-entropy here; the paper reports roughly half over 100 seeds. Unlike the bandit settings above, this is the experiment the paper itself runs, so the agreement in direction is more meaningful than the exact numbers.
+
+![MNIST curve](docs/mnist_curve.png)
+
 ## Limitations
 
-- Linear and tabular policies only; no neural networks, no MNIST, no continuous control.
+- The MNIST run uses 5 seeds (the paper uses 100) and evaluates on a 2,000-image test subset; everything else matches the paper's configuration. No continuous control.
 - The normalized-step bandit follows my reading of the paper's Section 4, not its exact protocol.
 - Small number of settings and seeds. Treat the comparisons as a study of behavior, not benchmarks.
 
 ## Possible extensions
 
-- Add a small neural policy on MNIST (needs PyTorch).
+- MNIST ablations the paper runs in its Appendix B: the other baselines (zero, batch-mean), more than one action sample per image, and the entropy-regularization comparison.
 - Investigate the noisy-reward stall mechanism further: the sweep (result 5) points at the gate's direction bias, but a general characterization is missing.
 - Try whitening in a setting where action scales vary across dimensions, the case the paper motivates it with; the 1-D testbed here only varies reward scale.
 
