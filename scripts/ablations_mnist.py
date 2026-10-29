@@ -16,7 +16,7 @@ Only one axis is varied at a time; the (constant, k=1, no-entropy) center is sha
 
 Per-run files go to docs/results_mnist_ablations/<name>_seed<seed>.json (resumable:
 existing files are skipped), --plot merges them into docs/results_mnist_ablations.json
-(summary) and docs/mnist_ablations.png.
+(summary) and docs/mnist_ablations.svg.
 """
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def make_plot(summary: dict, path: Path):
     axes[0].set_ylabel("test error (%)")
     fig.suptitle("MNIST bandit ablations (paper Appendix B; mean +/- 1 SE over 5 seeds)")
     fig.tight_layout()
-    fig.savefig(path, dpi=150)
+    fig.savefig(path)
     print(f"wrote {path}")
 
 
@@ -157,7 +157,7 @@ def main():
         out = Path(__file__).resolve().parent.parent / "docs" / "results_mnist_ablations.json"
         out.write_text(json.dumps(summary, indent=2))
         print(f"wrote {out}")
-        make_plot(summary, out.parent / "mnist_ablations.png")
+        make_plot(summary, out.parent / "mnist_ablations.svg")
         for axis, block in summary["axes"].items():
             print(f"[{axis}]")
             for v in block["variants"]:
