@@ -92,7 +92,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ![MNIST curve](docs/mnist_curve.png)
 
-**8. MNIST ablations from the paper's Appendix B (`docs/mnist_ablations.png`, 5 seeds).** Same setup as result 7, varying one factor at a time around the paper's configuration (`scripts/ablations_mnist.py`, per-run and aggregated numbers in `docs/results_mnist_ablations.json`).
+**8. MNIST ablations from the paper's Appendix B (`docs/mnist_ablations.svg`, 5 seeds).** Same setup as result 7, varying one factor at a time around the paper's configuration (`scripts/ablations_mnist.py`, per-run and aggregated numbers in `docs/results_mnist_ablations.json`).
 
 | Ablation | PG | DG (eta=1) | Takeaway |
 | --- | --- | --- | --- |
