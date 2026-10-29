@@ -92,6 +92,17 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ![MNIST curve](docs/mnist_curve.png)
 
+**8. MNIST ablations from the paper's Appendix B (`docs/mnist_ablations.png`, 5 seeds).** Same setup as result 7, varying one factor at a time around the paper's configuration (`scripts/ablations_mnist.py`, per-run and aggregated numbers in `docs/results_mnist_ablations.json`).
+
+| Ablation | PG | DG (eta=1) | Takeaway |
+| --- | --- | --- | --- |
+| Baseline b=0 vs 0.5 vs batch-mean | 5.8 / 4.1 / 5.4 | 4.1 / 3.4 / 5.2 | the paper's constant b=0.5 is best for both; b=0 hurts PG most (final errors 3.5 to 9.2% across seeds, a known high-variance case for REINFORCE without a baseline), DG degrades less |
+| 1 vs 4 vs 16 action samples per image | 4.1 / 3.7 / 3.5 | 3.4 / 3.4 / 3.5 | more samples help PG; DG at k=1 already matches PG at k=16 |
+| Entropy regularization 0 vs 0.01 vs 0.1 | 4.1 / 4.0 / 3.8 | 3.4 / 3.4 / 3.5 | little effect at 0.01; 0.1 helps PG slightly and does not help DG |
+
+Final test errors in %, mean over 5 seeds (standard errors about 0.1, except 1.7 for PG with b=0). DG stays below PG in every configuration tried. All numbers are mean-of-5-seeds like result 7, not the paper's 100.
+
+
 ## Limitations
 
 - The MNIST run uses 5 seeds (the paper uses 100) and evaluates on a 2,000-image test subset; everything else matches the paper's configuration. No continuous control.
@@ -100,7 +111,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ## Possible extensions
 
-- MNIST ablations the paper runs in its Appendix B: the other baselines (zero, batch-mean), more than one action sample per image, and the entropy-regularization comparison.
+- Done (result 8): the MNIST Appendix B ablations - other baselines, more action samples per image, entropy regularization.
 - Investigate the noisy-reward stall mechanism further: the sweep (result 5) points at the gate's direction bias, but a general characterization is missing.
 - Try whitening in a setting where action scales vary across dimensions, the case the paper motivates it with; the 1-D testbed here only varies reward scale.
 
