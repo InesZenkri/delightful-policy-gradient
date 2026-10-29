@@ -80,11 +80,17 @@ def build_policy(width: int = 100, seed: int = 0):
 
 def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 100,
           lr: float = 1e-3, eta: float = 1.0, baseline: str = "constant",
+          n_samples: int = 1, entropy_coef: float = 0.0,
           width: int = 100, seed: int = 0, eval_every: int = 200, eval_n: int = 2_000):
     """Train one method on the MNIST contextual bandit. Returns a dict of histories.
 
     eval_every: episodes between evaluations. eval_n: size of the held-out subset used
     for the test-error curve (first eval_n test images, fixed across methods/seeds).
+    n_samples: action samples per image (paper Appendix B ablation; k > 1 draws k
+    actions per image and averages the gated update over all batch x k samples;
+    batch_mean then averages rewards over all samples). entropy_coef: entropy
+    regularization weight for pg/dg (loss -= entropy_coef * H(pi); the paper's
+    Appendix B comparison). Both leave the ce oracle unchanged.
     """
     import torch
 
@@ -99,7 +105,7 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
     Xte_t = torch.from_numpy(Xte[:eval_n])
     yte_t = torch.from_numpy(yte[:eval_n])
 
-    hist_ep, hist_train_acc, hist_test_err = [], [], []
+    hist_ep, hist_train_acc, hist_test_err, hist_ent = [], [], [], []
     n = len(Xtr_t)
     for t in range(episodes):
         idx = torch.randint(0, n, (batch,))
@@ -111,8 +117,9 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
             batch_acc = float((logits.argmax(1) == y).float().mean())
         else:
             pi = log_pi.exp()
-            a = torch.multinomial(pi, 1).squeeze(1)
-            r = (a == y).float()
+            # with replacement: k i.i.d. action samples per image (k=1 unchanged)
+            a = torch.multinomial(pi, n_samples, replacement=True)  # (batch, k)
+            r = (a == y.unsqueeze(1)).float()
             if baseline == "zero":
                 b = 0.0
             elif baseline == "constant":
@@ -120,7 +127,7 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
             else:
                 b = float(r.mean())
             U = r - b
-            log_pi_a = log_pi[torch.arange(batch), a]
+            log_pi_a = torch.gather(log_pi, 1, a)
             if method == "dg":
                 surprisal = -log_pi_a
                 chi = U * surprisal
@@ -128,23 +135,32 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
                 loss = -(w * U * log_pi_a).mean()
             else:
                 loss = -(U * log_pi_a).mean()
+            if entropy_coef:
+                ent = -(pi * log_pi).sum(1).mean()
+                loss = loss - entropy_coef * ent
             batch_acc = float(r.mean())
         opt.zero_grad()
         loss.backward()
         opt.step()
         if t % eval_every == 0 or t == episodes - 1:
             with torch.no_grad():
-                test_err = 1.0 - float((policy(Xte_t).argmax(1) == yte_t).float().mean())
+                eval_log_pi = torch.log_softmax(policy(Xte_t), dim=1)
+                test_err = 1.0 - float((eval_log_pi.argmax(1) == yte_t).float().mean())
+                ent = float(-(eval_log_pi.exp() * eval_log_pi).sum(1).mean())
             hist_ep.append(t)
             hist_train_acc.append(batch_acc)
             hist_test_err.append(test_err)
+            hist_ent.append(ent)
     return {
         "episode": np.array(hist_ep),
         "batch_train_acc": np.array(hist_train_acc),
         "test_err": np.array(hist_test_err),
+        "eval_entropy": np.array(hist_ent),
         "final_test_err": hist_test_err[-1],
         "method": method,
         "seed": seed,
         "baseline": baseline,
+        "n_samples": n_samples,
+        "entropy_coef": entropy_coef,
         "eta": eta,
     }
