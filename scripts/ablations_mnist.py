@@ -98,14 +98,14 @@ def aggregate(seeds: list[int]) -> dict:
                     "name": name, "method": m, "label": label,
                     "baseline": baseline, "n_samples": k, "entropy_coef": ent,
                     "n_seeds": len(runs),
-                    "test_err_mean": errs.mean(0).tolist(),
-                    "test_err_se": (errs.std(0, ddof=1) / np.sqrt(len(runs))).tolist() if len(runs) > 1 else [0.0] * len(ep),
-                    "final_test_err_mean": float(errs[:, -1].mean()),
-                    "final_test_err_se": float(errs[:, -1].std(ddof=1) / np.sqrt(len(runs))) if len(runs) > 1 else 0.0,
-                    "final_test_err_all": errs[:, -1].tolist(),
+                    "test_err_mean": np.round(errs.mean(0), 4).tolist(),
+                    "test_err_se": (np.round(errs.std(0, ddof=1) / np.sqrt(len(runs)), 4)).tolist() if len(runs) > 1 else [0.0] * len(ep),
+                    "final_test_err_mean": round(float(errs[:, -1].mean()), 4),
+                    "final_test_err_se": round(float(errs[:, -1].std(ddof=1) / np.sqrt(len(runs))), 4) if len(runs) > 1 else 0.0,
+                    "final_test_err_all": np.round(errs[:, -1], 4).tolist(),
                 })
                 if ents is not None:
-                    summary["axes"][axis]["variants"][-1]["eval_entropy_mean"] = ents.mean(0).tolist()
+                    summary["axes"][axis]["variants"][-1]["eval_entropy_mean"] = np.round(ents.mean(0), 4).tolist()
     if summary["episodes"] is None:
         raise SystemExit(f"no per-run files in {OUT_DIR}")
     return summary
