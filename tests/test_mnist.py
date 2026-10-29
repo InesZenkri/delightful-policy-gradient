@@ -79,3 +79,29 @@ def test_determinism():
     r1 = train("dg", X, y, X, y, seed=3, **kw)
     r2 = train("dg", X, y, X, y, seed=3, **kw)
     assert np.array_equal(r1["test_err"], r2["test_err"])
+
+def test_n_samples_and_entropy_run_and_record_config():
+    X, y = _toy_data(n=64)
+    kw = dict(episodes=50, batch=16, eval_every=25, eval_n=64)
+    r = train("dg", X, y, X, y, seed=3, n_samples=4, entropy_coef=0.01, **kw)
+    assert r["n_samples"] == 4 and r["entropy_coef"] == 0.01
+    assert np.all(np.isfinite(r["test_err"]))
+
+
+def test_entropy_coef_changes_the_update():
+    # a large entropy weight keeps the policy near uniform on the toy problem,
+    # while plain PG solves it - so the entropy term must change the trajectory
+    X, y = _toy_data()
+    kw = dict(episodes=300, batch=32, eval_every=100, eval_n=200, seed=0)
+    r_plain = train("pg", X, y, X, y, **kw)
+    r_ent = train("pg", X, y, X, y, entropy_coef=100.0, **kw)
+    assert r_ent["eval_entropy"][-1] > r_plain["eval_entropy"][-1]
+
+
+def test_default_config_unchanged_by_new_options():
+    # n_samples=1, entropy_coef=0 must reproduce the original update exactly
+    X, y = _toy_data(n=64)
+    kw = dict(episodes=50, batch=16, eval_every=25, eval_n=64)
+    r1 = train("dg", X, y, X, y, seed=3, **kw)
+    r2 = train("dg", X, y, X, y, seed=3, n_samples=1, entropy_coef=0.0, **kw)
+    assert np.array_equal(r1["test_err"], r2["test_err"])
