@@ -25,6 +25,7 @@ A rare action with positive advantage (a "breakthrough") keeps almost its full w
 | Path | What it does |
 | --- | --- |
 | `dgplay/bandit.py` | Softmax-policy K-armed bandit, PG and DG updates, optional unit-norm ("normalized") steps, optional delight whitening |
+| `dgplay/analysis.py` | Exact expected-update analysis: per-visit gate coefficient, direction bias, expected direction, expected-update ODE, stall balance equation |
 | `dgplay/contextual.py` | Synthetic 10-class contextual bandit with a linear softmax policy (reward = correct class) |
 | `dgplay/continuous.py` | 1-D continuous-action bandit with a Gaussian policy (density-based surprisal, clipped log-density) |
 | `dgplay/mnist.py` | MNIST as a one-step contextual bandit, two-layer ReLU MLP policy in PyTorch (the paper's Section 3 setup) |
@@ -33,9 +34,10 @@ A rare action with positive advantage (a "breakthrough") keeps almost its full w
 | `scripts/symmetric_normalized.py` | One-correct-arm bandit with normalized steps (my reading of the paper's symmetric-bandit setup) |
 | `scripts/compare_contextual.py` | PG vs DG vs supervised cross-entropy on the synthetic contextual bandit |
 | `scripts/sweep_eta_baseline.py` | Sweep of DG's temperature eta and the EMA baseline strength in two bandit settings |
+| `scripts/stall_mechanism.py` | Tests whether the derived gate balance equation predicts the noisy-reward stall across 55+ settings |
 | `scripts/compare_continuous.py` | PG vs DG with clipped, whitened, and retuned delight on the continuous bandit at three reward scales |
 | `scripts/compare_mnist.py` | PG vs DG vs supervised cross-entropy on MNIST; one (method, seed) per invocation, then `--plot` |
-| `tests/` | Finite-difference gradient checks, gate formulas, and behavior tests |
+| `tests/` | Finite-difference gradient checks, gate formulas, expected-update analysis checks, and behavior tests |
 
 ## Run it
 
@@ -49,6 +51,7 @@ PYTHONPATH=. python scripts/compare.py              # about 40 s on a CPU
 PYTHONPATH=. python scripts/compare.py --normalize
 PYTHONPATH=. python scripts/compare_contextual.py
 PYTHONPATH=. python scripts/sweep_eta_baseline.py     # about 30 s on a CPU
+PYTHONPATH=. python scripts/stall_mechanism.py          # about 40 s on a CPU
 PYTHONPATH=. python scripts/compare_continuous.py     # about 20 s on a CPU
 PYTHONPATH=. python scripts/compare_mnist.py --method dg --seed 0   # one run, about 10 s on a CPU
 PYTHONPATH=. python scripts/compare_mnist.py --plot                 # aggregate + figure
@@ -69,6 +72,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 | Eta/baseline sweep (normalized) | solves both scenarios | symmetric: robust; noisy: stall unless eta >= 4 | stall is in the gate, not the baseline |
 | Continuous 1-D bandit | identical at any reward scale | changes with reward scale; whitening fixes that | whitening makes eta unit-free, not faster |
 | MNIST contextual bandit (MLP) | 4.1% final test error | 3.4% (supervised CE: 2.9%) | DG ahead at every checkpoint; closes about 60% of PG's gap to CE |
+| Noisy-reward stall mechanism (55 settings) | no interior fixed point, solves every setting | stalls at the gate's balance point | closed-form equation predicts the plateau in the noisy regime; large gaps escape |
 
 ![Demo](docs/demo_final.png)
 
@@ -102,6 +106,12 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 Final test errors in %, mean over 5 seeds (standard errors about 0.1, except 1.7 for PG with b=0). DG stays below PG in every configuration tried. All numbers are mean-of-5-seeds like result 7, not the paper's 100.
 
+**9. The noisy-reward stall is the gate's interior balance point (`docs/stall_mechanism.png`, `scripts/stall_mechanism.py`; derivation in `dgplay/analysis.py`).** Result 5 left the mechanism open; for Bernoulli bandits it now has a closed form. Averaging the gate over the reward draw gives DG's expected per-visit coefficient on arm a: c(pi_a; p_a) = p_a(1-b)sigmoid((1-b)l_a/eta) - (1-p_a)b sigmoid(-b l_a/eta), with l_a = -log pi_a, and the expected direction is pi_a(c_a - sum_j pi_j c_j) (checked against exact enumeration and Monte Carlo in `tests/test_analysis.py`). PG is the same formula with the gate removed, c_a = p_a - b. DG's extra term is the direction bias of result 3, and at a matched baseline (b = p) it is p(1-p)[sigmoid(p l/eta) + sigmoid((1-p)l/eta) - 1] >= 0, larger for rarer arms - the general form of the old one-case unit test. Because c decreases as pi grows, an arm's probability rises only while its coefficient exceeds the probability-weighted mean, so the dynamics has an interior fixed point where all coefficients are equal. PG's coefficients do not depend on pi, so nothing balances below the optimum for it.
+
+Solving the two-group balance condition c(pi_best; p_best) = c(pi_rest; p_rest), with the baseline at its fixed-point value b = p_rest + gap*pi_best, predicts the canonical stall at regret 0.086 - observed 0.084 (+- 0.001 over 10 seeds), and the deterministic expected-update ODE built from the same equations lands at 0.085 and tracks the stochastic trajectories the whole way (panel A). Across a 55-setting grid (K in {2,5,10,20,50}, gap in {0.05,0.1,0.2,0.4}, p_rest in {0.3,0.5,0.7}, 5 seeds each) the predicted plateau matches the observed one within 0.016 (mean 0.002) in all 20 noisy-regime settings (gap <= 0.1, p_rest >= 0.5), and stays close at gap = 0.2 for p_rest >= 0.5 (panel C). The prediction breaks exactly where the setting stops being noisy: at gap = 0.4 everywhere, and at p_rest = 0.3 from gap = 0.1 up, the within-batch sampling noise of the normalized update (E[d/||d||] differs from E[d]/||E[d]||, the one approximation in the ODE) knocks the policy off the balance point and DG escapes - observed regret near zero where the equation predicts a deep stall (13 such configs, listed in `docs/results_stall_mechanism.json`). So: in the noisy regime the stall is the gate-balance fixed point, with a closed-form level; outside it DG does not stall at all. The stall is also robust to structure: with 2, 5 or 10 good arms out of 20 it persists at a smaller, still-predicted plateau (predicted 0.074 / 0.048 / 0.023, observed 0.070 / 0.044 / 0.024). The same equation reproduces the eta scan of result 5 (predicted 0.068 / 0.084 / 0.086 / 0.077 / 0.043 / 0.003 for eta = 0.25..8, observed 0.061 / 0.081 / 0.084 / 0.072 / 0.022 / 0.007; the eta = 4 gap is the same escape effect at a flattened gate). Long-run controls at 4x steps separate stalls from slow convergence: at K=50, gap = 0.1 the DG stall persists (0.090) while PG, still catching up at 1500 steps, reaches 0.000. One caveat: the balance equation says where DG stops, not how fast it gets there.
+
+![stall mechanism](docs/stall_mechanism.png)
+
 
 ## Limitations
 
@@ -112,7 +122,7 @@ Final test errors in %, mean over 5 seeds (standard errors about 0.1, except 1.7
 ## Possible extensions
 
 - Done (result 8): the MNIST Appendix B ablations - other baselines, more action samples per image, entropy regularization.
-- Investigate the noisy-reward stall mechanism further: the sweep (result 5) points at the gate's direction bias, but a general characterization is missing.
+- Done (result 9): the noisy-reward stall mechanism - closed-form per-visit gate bias, and a balance equation that predicts the stall level in the noisy regime (and where DG escapes it).
 - Try whitening in a setting where action scales vary across dimensions, the case the paper motivates it with; the 1-D testbed here only varies reward scale.
 
 ## License
