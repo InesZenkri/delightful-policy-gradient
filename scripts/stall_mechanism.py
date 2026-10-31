@@ -152,6 +152,31 @@ for n in N_GOODS:
         n, row["dg_observed"]["mean"], row["dg_predicted"]["balance_regret"]))
 out["n_good_scan"] = ng_scan
 
+# --- controls: is the escape caused by normalization noise? ----------------------
+# Un-normalized steps make the stochastic batch update average to the exact
+# expected direction (no E[d/||d||] vs E[d]/||E[d]|| gap). If the escapes above
+# are caused by the normalized update's sampling noise, un-normalized runs must
+# stall at the predicted level in the escape configs. lr only sets the timescale
+# here; the fixed point (direction = 0) is the same balance point.
+unnorm = []
+esc_cfgs = [(g["k"], g["p_rest"], g["gap"]) for g in grid
+            if g["dg_predicted"]["balance_regret"] > 0.05
+            and g["dg_observed"]["mean"] < 0.5 * g["dg_predicted"]["balance_regret"]]
+for k, p, gap in esc_cfgs + [(CANON["k"], CANON["p"], CANON["gap"])]:
+    m = means_two_groups(k, p, gap)
+    vals = [late_regret(run_agent(m, "dg", steps=20_000, batch=8, lr=0.5, eta=1.0,
+                                  seed=s, baseline_decay=DECAY, normalize=False),
+                        m.max())
+            for s in range(5)]
+    pred = stall_equilibrium(k, p, gap)["regret"]
+    unnorm.append({"k": k, "p_rest": p, "gap": gap, "steps": 20_000, "lr": 0.5,
+                   "normalize": False, "balance_regret": pred,
+                   "regret_mean": float(np.mean(vals)),
+                   "regret_sem": float(np.std(vals) / np.sqrt(5))})
+    print("unnormalized K={} p={} gap={}: observed {:.4f} | balance {:.4f}".format(
+        k, p, gap, np.mean(vals), pred))
+out["unnormalized_escape_controls"] = unnorm
+
 # --- controls: stall vs convergence lag -----------------------------------------
 # At 1500 steps a config can sit above zero either because it is at the predicted
 # stall or because it has not converged yet (PG at K=50, or the easy n_good>=5

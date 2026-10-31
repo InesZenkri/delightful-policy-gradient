@@ -115,3 +115,18 @@ def test_simulate_expected_is_deterministic():
     a = simulate_expected(means, "dg", steps=200)
     b = simulate_expected(means, "dg", steps=200)
     assert np.array_equal(a["probs"], b["probs"])
+
+
+def test_unnormalized_steps_restore_stall_where_normalized_escapes():
+    # Measured escape mechanism (README result 9): at K=20, p=0.5, gap=0.4 the
+    # normalized stochastic run escapes the predicted stall, but removing
+    # normalization - so the batch update averages to the exact expected
+    # direction - restores the stall at the balance-equation level.
+    means = np.array([0.5] * 19 + [0.9])
+    eq = stall_equilibrium(20, 0.5, 0.4)
+    norm = run_agent(means, "dg", steps=1500, batch=8, lr=0.1, seed=0, normalize=True)
+    unnorm = run_agent(means, "dg", steps=20_000, batch=8, lr=0.5, seed=0, normalize=False)
+    reg_norm = 0.9 - norm["expected_reward"][-500:].mean()
+    reg_unnorm = 0.9 - unnorm["expected_reward"][-500:].mean()
+    assert reg_norm < 0.3 * eq["regret"]              # normalized escapes
+    assert abs(reg_unnorm - eq["regret"]) < 0.03      # un-normalized stalls as predicted

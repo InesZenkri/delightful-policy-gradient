@@ -2284,6 +2284,162 @@
    }
   }
  ],
+ "unnormalized_escape_controls": [
+  {
+   "k": 5,
+   "p_rest": 0.3,
+   "gap": 0.1,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.054177146433683904,
+   "regret_mean": 0.05381152268159689,
+   "regret_sem": 0.0013291125109523105
+  },
+  {
+   "k": 5,
+   "p_rest": 0.3,
+   "gap": 0.2,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.0670517513578693,
+   "regret_mean": 0.06464445083478121,
+   "regret_sem": 0.003822576125096639
+  },
+  {
+   "k": 5,
+   "p_rest": 0.3,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.05529106426902706,
+   "regret_mean": 0.052320592319621315,
+   "regret_sem": 0.0014752453165933813
+  },
+  {
+   "k": 10,
+   "p_rest": 0.3,
+   "gap": 0.1,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.0678878451226473,
+   "regret_mean": 0.06759201658074997,
+   "regret_sem": 0.0012956377028542827
+  },
+  {
+   "k": 10,
+   "p_rest": 0.3,
+   "gap": 0.2,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.09256904404758402,
+   "regret_mean": 0.08975432427137543,
+   "regret_sem": 0.0025409389347310386
+  },
+  {
+   "k": 10,
+   "p_rest": 0.3,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.08354878778060817,
+   "regret_mean": 0.07895587760268155,
+   "regret_sem": 0.00212720061246248
+  },
+  {
+   "k": 10,
+   "p_rest": 0.5,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.07342311093104961,
+   "regret_mean": 0.07166771179555961,
+   "regret_sem": 0.0020793242100779754
+  },
+  {
+   "k": 20,
+   "p_rest": 0.3,
+   "gap": 0.2,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.11238011739824919,
+   "regret_mean": 0.10894840259927527,
+   "regret_sem": 0.0025176830192063997
+  },
+  {
+   "k": 20,
+   "p_rest": 0.3,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.11059949657843555,
+   "regret_mean": 0.10401668268011291,
+   "regret_sem": 0.0030203224004218725
+  },
+  {
+   "k": 20,
+   "p_rest": 0.5,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.10332653584099508,
+   "regret_mean": 0.0973492460444195,
+   "regret_sem": 0.0033850795244455946
+  },
+  {
+   "k": 50,
+   "p_rest": 0.3,
+   "gap": 0.2,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.1306277411325662,
+   "regret_mean": 0.1300322503116958,
+   "regret_sem": 0.0023474454838218655
+  },
+  {
+   "k": 50,
+   "p_rest": 0.3,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.14117304024327157,
+   "regret_mean": 0.13709989431289418,
+   "regret_sem": 0.004639664672722474
+  },
+  {
+   "k": 50,
+   "p_rest": 0.5,
+   "gap": 0.4,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.14573265810227404,
+   "regret_mean": 0.13436248352349456,
+   "regret_sem": 0.0039006753234553325
+  },
+  {
+   "k": 20,
+   "p_rest": 0.5,
+   "gap": 0.1,
+   "steps": 20000,
+   "lr": 0.5,
+   "normalize": false,
+   "balance_regret": 0.08589896730501809,
+   "regret_mean": 0.0861361009333764,
+   "regret_sem": 0.0004975614855472924
+  }
+ ],
  "long_run_controls": [
   {
    "config": "K=50 p=0.5 gap=0.1",
