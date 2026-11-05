@@ -36,6 +36,7 @@ A rare action with positive advantage (a "breakthrough") keeps almost its full w
 | `scripts/sweep_eta_baseline.py` | Sweep of DG's temperature eta and the EMA baseline strength in two bandit settings |
 | `scripts/stall_mechanism.py` | Tests whether the derived gate balance equation predicts the noisy-reward stall across 55+ settings |
 | `scripts/compare_continuous.py` | PG vs DG with clipped, whitened, and retuned delight on the continuous bandit at three reward scales |
+| `scripts/compare_continuous_multidim.py` | PG vs DG vs whitened DG vs Mahalanobis-surprisal DG on a 3-D bandit with per-dimension action scales |
 | `scripts/compare_mnist.py` | PG vs DG vs supervised cross-entropy on MNIST; one (method, seed) per invocation, then `--plot` |
 | `tests/` | Finite-difference gradient checks, gate formulas, expected-update analysis checks, and behavior tests |
 
@@ -53,6 +54,7 @@ PYTHONPATH=. python scripts/compare_contextual.py
 PYTHONPATH=. python scripts/sweep_eta_baseline.py     # about 30 s on a CPU
 PYTHONPATH=. python scripts/stall_mechanism.py          # about 2 min on a CPU
 PYTHONPATH=. python scripts/compare_continuous.py     # about 20 s on a CPU
+PYTHONPATH=. python scripts/compare_continuous_multidim.py  # about 1 min on a CPU
 PYTHONPATH=. python scripts/compare_mnist.py --method dg --seed 0   # one run, about 10 s on a CPU
 PYTHONPATH=. python scripts/compare_mnist.py --plot                 # aggregate + figure
 ```
@@ -73,6 +75,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 | Continuous 1-D bandit | identical at any reward scale | changes with reward scale; whitening fixes that | whitening makes eta unit-free, not faster |
 | MNIST contextual bandit (MLP) | 4.1% final test error | 3.4% (supervised CE: 2.9%) | DG ahead at every checkpoint; closes about 60% of PG's gap to CE |
 | Noisy-reward stall mechanism (55 settings) | no interior fixed point, solves every setting | stalls at the gate's balance point | closed-form equation predicts the plateau in the noisy regime; large gaps escape |
+| Continuous 3-D bandit, per-dimension action scales | identical at every scale (final 1.000) | final 0.171 (w=0.02) to 0.342 (w=50); whitening does not fix it | scale offset in the log-density inverts or saturates the gate; only the sum of log-scales matters |
 
 ![Demo](docs/demo_final.png)
 
@@ -112,6 +115,12 @@ Solving the two-group balance condition c(pi_best; p_best) = c(pi_rest; p_rest),
 
 ![stall mechanism](docs/stall_mechanism.png)
 
+
+**10. Per-dimension action scales: whitening does not fix what it fixed in 1-D (`docs/continuous_multidim.png`, `scripts/compare_continuous_multidim.py`, 20 seeds).** The paper motivates whitening with action scales that vary across dimensions; the 1-D testbed (result 6) could only vary reward scale. This testbed is a 3-D smooth bandit whose per-dimension widths set each dimension's action scale, with a diagonal Gaussian policy starting at each dimension's scale (sigma_i = w_i) and per-dimension learning rates lr * w_i^2. In z-units every scale choice is the same task, and PG is invariant to the widths by construction - a designed control, not natural optimizer robustness. Only the gate sees the scales. PG solves every setting (final return 1.000); DG at eta=1 does not: its final return runs from 0.171 (all widths 0.02) to 0.342 (all widths 50), monotone in the scale. Two failure modes, both from the scale-dependent offset in the Gaussian log-density: at small scales the surprisal is negative on average (measured mean -7.5 over the first 100 steps), so chi = U * l flips sign and the gate suppresses breakthroughs and amplifies blunders; at large scales the surprisal rails the +10 clip for 100% of the batch, so the gate degenerates to an advantage-magnitude filter with no surprisal signal left. A mixed setting with widths (0.05, 1, 20), whose log-scales sum to the same value as all-w=1, reproduces the all-w=1 run to floating-point precision (a unit test checks this), so what enters the gate is the sum of the per-dimension log-scales, not the heterogeneity itself.
+
+The paper's batch whitening of chi does not restore invariance here: its curves sit on unwhitened DG's (final returns within 0.002 at the extremes, slightly lower at the intermediate width 0.2: 0.198 vs 0.230, a small but real difference at these standard errors of about 0.002). The reason is visible in the formula: whitening cancels exactly affine transforms chi -> a * chi + b (a unit test checks this), and reward scaling is one - that is why it worked in result 6. An action-scale change instead adds a constant C to the surprisal, so chi -> chi + C * U, which is not affine in chi and survives whitening; once the offset has inverted or railed the surprisal, whitening can only change the gate's sharpness, not its structure. A mode-relative surprisal 0.5 * ||z||^2 (= log pi(mu) - log pi(a); my comparator, not the paper's variant) is scale-free by construction and gives identical runs at every scale (final 0.234) - but like whitening in result 6, it buys consistency, not performance: its level sits between DG's worst and best scale-dependent outcomes. Scope caveat: this is a toy diagonal-Gaussian gate; the offset is a coordinate convention of the differential log-density, and none of this speaks to the paper's DeepMind Control setup, where rewards were EMA-normalized and clipping was reported sufficient.
+
+![multidim whitening](docs/continuous_multidim.png)
 
 ## Limitations
 
