@@ -140,7 +140,7 @@ def make_plot(summary: dict, path: Path):
         ax.legend(fontsize=7)
     axes[0].set_ylabel("test error (%)")
     n_seeds = max((v["n_seeds"] for b in summary["axes"].values() for v in b["variants"]), default=0)
-    fig.suptitle(f"MNIST bandit ablations (paper Appendix B; mean +/- 1 SE over {n_seeds} seeds)")
+    fig.suptitle(f"MNIST bandit ablations (paper Appendix B, DG with detached gate; mean +/- 1 SEM over {n_seeds} seeds)")
     fig.tight_layout()
     fig.savefig(path)
     print(f"wrote {path}")
