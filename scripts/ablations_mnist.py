@@ -59,30 +59,34 @@ def configs() -> list[tuple[str, str, str, int, float]]:
     return out
 
 
-def run_all(seeds: list[int], episodes: int, eval_every: int, max_runs: int | None = None):
+def run_all(seeds: list[int], episodes: int, eval_every: int, max_runs: int | None = None,
+            gate: str = "detach"):
     data = load_mnist()
-    todo = [(n, m, b, k, e, s) for (n, m, b, k, e) in configs() for s in seeds
-            if not (OUT_DIR / f"{n}_seed{s}.json").exists()]
+    suffix = "_gateautograd" if gate == "autograd" else ""
+    todo = [(n + (suffix if m == "dg" else ""), m, b, k, e, s)
+            for (n, m, b, k, e) in configs() for s in seeds
+            if not (OUT_DIR / f"{n}{suffix if m == 'dg' else ''}_seed{s}.json").exists()]
     if max_runs:
         todo = todo[:max_runs]
     print(f"{len(todo)} runs this call", flush=True)
     for name, m, b, k, e, s in todo:
         r = train(m, *data, episodes=episodes, eval_every=eval_every, seed=s,
-                  baseline=b, n_samples=k, entropy_coef=e)
+                  baseline=b, n_samples=k, entropy_coef=e, detach_gate=(gate == "detach"))
         p = OUT_DIR / f"{name}_seed{s}.json"
         p.write_text(json.dumps({k2: (v.tolist() if isinstance(v, np.ndarray) else v)
                                  for k2, v in r.items()}))
         print(f"wrote {p}  final test err {r['final_test_err']*100:.2f}%", flush=True)
 
 
-def aggregate(seeds: list[int]) -> dict:
+def aggregate(seeds: list[int], gate: str = "detach") -> dict:
     summary = {"episodes": None, "axes": {}}
     for axis, variants in AXES.items():
         summary["axes"][axis] = {"labels": AXIS_LABELS[axis], "variants": []}
         for (baseline, k, ent), label in zip(variants, AXIS_LABELS[axis]):
             for m in METHODS:
-                name = f"{m}_{axis}_{baseline}_{k}_{ent}"
-                run_name = name if (baseline, k, ent) != ("constant", 1, 0.0) else f"{m}_baseline_constant_1_0.0"
+                suffix = "_gateautograd" if (m == "dg" and gate == "autograd") else ""
+                name = f"{m}{suffix}_{axis}_{baseline}_{k}_{ent}"
+                run_name = name if (baseline, k, ent) != ("constant", 1, 0.0) else f"{m}{suffix}_baseline_constant_1_0.0"
                 runs = []
                 for s in seeds:
                     p = OUT_DIR / f"{run_name}_seed{s}.json"
@@ -135,7 +139,8 @@ def make_plot(summary: dict, path: Path):
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7)
     axes[0].set_ylabel("test error (%)")
-    fig.suptitle("MNIST bandit ablations (paper Appendix B; mean +/- 1 SE over 5 seeds)")
+    n_seeds = max((v["n_seeds"] for b in summary["axes"].values() for v in b["variants"]), default=0)
+    fig.suptitle(f"MNIST bandit ablations (paper Appendix B; mean +/- 1 SE over {n_seeds} seeds)")
     fig.tight_layout()
     fig.savefig(path)
     print(f"wrote {path}")
@@ -148,16 +153,20 @@ def main():
     ap.add_argument("--episodes", type=int, default=10_000)
     ap.add_argument("--eval-every", type=int, default=200)
     ap.add_argument("--plot", action="store_true")
+    ap.add_argument("--gate", choices=["detach", "autograd"], default="detach",
+                    help="detach (default) implements the paper's Algorithm 1; "
+                         "autograd is the pre-fix variant kept as an ablation")
     ap.add_argument("--max-runs", type=int, default=None)
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if args.plot:
-        summary = aggregate(args.seeds)
-        out = Path(__file__).resolve().parent.parent / "docs" / "results_mnist_ablations.json"
+        summary = aggregate(args.seeds, gate=args.gate)
+        suffix = "_autogradgate" if args.gate == "autograd" else ""
+        out = Path(__file__).resolve().parent.parent / "docs" / f"results_mnist_ablations{suffix}.json"
         out.write_text(json.dumps(summary, indent=2))
         print(f"wrote {out}")
-        make_plot(summary, out.parent / "mnist_ablations.svg")
+        make_plot(summary, out.parent / f"mnist_ablations{suffix}.svg")
         for axis, block in summary["axes"].items():
             print(f"[{axis}]")
             for v in block["variants"]:
@@ -166,7 +175,7 @@ def main():
         return
     if not args.run:
         ap.error("--run or --plot required")
-    run_all(args.seeds, args.episodes, args.eval_every, args.max_runs)
+    run_all(args.seeds, args.episodes, args.eval_every, args.max_runs, gate=args.gate)
 
 
 if __name__ == "__main__":
