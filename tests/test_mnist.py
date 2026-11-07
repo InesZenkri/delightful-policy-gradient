@@ -24,7 +24,7 @@ def test_idx_loader_roundtrip(tmp_path):
     _write_idx(tmp_path / "train-labels-idx1-ubyte.gz", 2049, (4,), labels)
     _write_idx(tmp_path / "t10k-images-idx3-ubyte.gz", 2051, (4, 2, 2), imgs)
     _write_idx(tmp_path / "t10k-labels-idx1-ubyte.gz", 2049, (4,), labels)
-    Xtr, ytr, Xte, yte = load_mnist(tmp_path)
+    Xtr, ytr, Xte, yte = load_mnist(tmp_path, verify=False)
     assert Xtr.shape == (4, 4) and np.isclose(Xtr.max(), 15 / 255)
     assert list(ytr) == [0, 1, 2, 3] and Xte.shape == (4, 4)
 
@@ -105,3 +105,93 @@ def test_default_config_unchanged_by_new_options():
     r1 = train("dg", X, y, X, y, seed=3, **kw)
     r2 = train("dg", X, y, X, y, seed=3, n_samples=1, entropy_coef=0.0, **kw)
     assert np.array_equal(r1["test_err"], r2["test_err"])
+
+
+def test_load_mnist_rejects_corrupt_cache(tmp_path, monkeypatch):
+    """A cache file with a wrong SHA-256 is quarantined and raises, not silently used."""
+    import hashlib
+
+    import pytest
+
+    import dgplay.mnist as mn
+    from dgplay.mnist import MNIST_URLS, load_mnist
+
+    data_dir = tmp_path / "mnist"
+    data_dir.mkdir()
+    # hermetic fixture: tiny valid IDX files, pins patched to match, one corrupted
+    import numpy as np
+
+    imgs = np.arange(16, dtype=np.uint8).reshape(4, 2, 2)
+    labels = np.arange(4, dtype=np.uint8)
+    pins = {}
+    for url in MNIST_URLS.values():
+        fname = url.rsplit("/", 1)[1]
+        p = data_dir / fname
+        if "images" in fname:
+            _write_idx(p, 2051, (4, 2, 2), imgs)
+        else:
+            _write_idx(p, 2049, (4,), labels)
+        pins[fname] = hashlib.sha256(p.read_bytes()).hexdigest()
+    victim = data_dir / "t10k-labels-idx1-ubyte.gz"
+    victim.write_bytes(b"corrupted bytes")
+    monkeypatch.setattr(mn, "MNIST_SHA256", pins)
+    # an earlier quarantined file must not be overwritten by a second bad file
+    prior = data_dir / "t10k-labels-idx1-ubyte.gz.corrupt"
+    prior.write_bytes(b"previous quarantine")
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        load_mnist(data_dir)
+    # quarantined, not deleted, and the prior quarantine is untouched
+    assert not victim.exists()
+    assert prior.read_bytes() == b"previous quarantine"
+    assert (data_dir / "t10k-labels-idx1-ubyte.gz.corrupt.1").exists()
+
+
+def test_load_mnist_rejects_corrupt_fresh_download(tmp_path, monkeypatch):
+    """A download whose bytes hash wrong raises and leaves no file at the real path."""
+    import io
+
+    import pytest
+
+    import dgplay.mnist as mn
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._buf = io.BytesIO(payload)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n=-1):
+            return self._buf.read(n)
+
+    monkeypatch.setattr(mn.urllib.request, "urlopen",
+                        lambda url, timeout=None: _FakeResponse(b"not mnist"))
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        mn.load_mnist(tmp_path / "mnist")
+    assert not list(tmp_path.rglob("*.part"))
+    # bad download is quarantined like a bad cache file
+    assert len(list(tmp_path.rglob("*.corrupt"))) == 1
+
+
+def test_load_mnist_download_timeout(tmp_path, monkeypatch):
+    """urlopen is called with the configured timeout and a timeout failure propagates
+    without leaving partial files."""
+    import pytest
+
+    import dgplay.mnist as mn
+
+    calls = {}
+
+    def _timeout(url, timeout=None):
+        calls["timeout"] = timeout
+        raise TimeoutError("simulated hang")
+
+    monkeypatch.setattr(mn.urllib.request, "urlopen", _timeout)
+    with pytest.raises(TimeoutError):
+        mn.load_mnist(tmp_path / "mnist")
+    assert calls["timeout"] == mn.DOWNLOAD_TIMEOUT
+    assert not list(tmp_path.rglob("*.part"))
+    assert not list(tmp_path.rglob("*.gz"))

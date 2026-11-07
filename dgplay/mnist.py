@@ -19,6 +19,8 @@ ossci-datasets S3 mirror and cached under data/mnist/ (gitignored).
 from __future__ import annotations
 
 import gzip
+import hashlib
+import os
 import struct
 import urllib.request
 from pathlib import Path
@@ -32,6 +34,41 @@ MNIST_URLS = {
     "test_labels": "https://ossci-datasets.s3.amazonaws.com/mnist/t10k-labels-idx1-ubyte.gz",
 }
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "mnist"
+
+# SHA-256 of the four IDX .gz files, computed from the copies used for all results in
+# this repo and cross-checked against the MD5s pinned by torchvision
+# (torchvision/datasets/mnist.py, resources list). Verification is mandatory: a corrupt
+# or swapped cache file raises instead of silently training on bad data.
+MNIST_SHA256 = {
+    "train-images-idx3-ubyte.gz": "440fcabf73cc546fa21475e81ea370265605f56be210a4024d2ca8f203523609",
+    "train-labels-idx1-ubyte.gz": "3552534a0a558bbed6aed32b30c495cca23d567ec52cac8be1a0730e8010255c",
+    "t10k-images-idx3-ubyte.gz": "8d422c7b0a1c1c79245a5bcf07fe86e33eeafee792b84584aec276f5a2dbc4e6",
+    "t10k-labels-idx1-ubyte.gz": "f7ae60f92e00ec6debd23a6088c31dbd2371eca3ffa0defaefb259924204aec6",
+}
+DOWNLOAD_TIMEOUT = 30  # seconds; a hung mirror should fail fast, not stall a run
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _fetch(url: str, path: Path) -> None:
+    """Download to a .part file first, then rename, so an interrupted or failed
+    download never leaves a partial file at the real path."""
+    print(f"downloading {url} -> {path}")
+    part = path.with_name(path.name + ".part")
+    try:
+        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT) as r, open(part, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        os.replace(part, path)
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
 
 
 def _read_idx_images(path: Path) -> np.ndarray:
@@ -48,16 +85,36 @@ def _read_idx_labels(path: Path) -> np.ndarray:
         return np.frombuffer(f.read(n), dtype=np.uint8).astype(np.int64)
 
 
-def load_mnist(data_dir: Path | str = DATA_DIR) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Returns (X_train, y_train, X_test, y_test); images float32 in [0, 1], flattened."""
+def load_mnist(data_dir: Path | str = DATA_DIR, verify: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Returns (X_train, y_train, X_test, y_test); images float32 in [0, 1], flattened.
+
+    Downloads and cache reads are verified against pinned SHA-256 hashes. Pass
+    verify=False only for synthetic IDX files in tests.
+    """
     data_dir = Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     paths = {}
     for name, url in MNIST_URLS.items():
-        p = data_dir / url.rsplit("/", 1)[1]
+        fname = url.rsplit("/", 1)[1]
+        p = data_dir / fname
         if not p.exists():
-            print(f"downloading {url} -> {p}")
-            urllib.request.urlretrieve(url, p)
+            _fetch(url, p)
+        if verify:
+            digest = _sha256(p)
+            if digest != MNIST_SHA256[fname]:
+                # Quarantine, never delete: the bad bytes may be evidence or a
+                # deliberately prepared file, and removal should be the user's call.
+                # Pick a free name so a second bad file never overwrites the first.
+                quarantine = p.with_name(p.name + ".corrupt")
+                n = 0
+                while quarantine.exists():
+                    n += 1
+                    quarantine = p.with_name(f"{p.name}.corrupt.{n}")
+                os.replace(p, quarantine)
+                raise RuntimeError(
+                    f"{p}: SHA-256 mismatch (got {digest}, want {MNIST_SHA256[fname]}). "
+                    f"Moved the file aside to {quarantine} - delete it manually and "
+                    "re-run to download a fresh copy")
         paths[name] = p
     Xtr = _read_idx_images(paths["train_images"]).astype(np.float32) / 255.0
     ytr = _read_idx_labels(paths["train_labels"])
