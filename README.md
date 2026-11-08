@@ -5,7 +5,7 @@ A small playground (NumPy bandits, one PyTorch experiment) that compares plain p
 > Ian Osband (Google DeepMind), *Delightful Policy Gradient*, arXiv:2603.14608 (March 2026), accepted at the Reinforcement Learning Journal / RLC 2026.
 > https://arxiv.org/abs/2603.14608
 
-This is an independent, small-scale implementation written from the paper's Algorithm 1. **It is not a reproduction of the paper's experiments** and is not affiliated with the author or Google. The paper's larger setups (transformer sequence tasks, 28 DeepMind Control Suite environments at 10M steps) are not run here. Its MNIST diagnostic (Section 3) is run at the paper's configuration, with 5 seeds instead of 100 (result 7 below).
+This is an independent, small-scale implementation written from the paper's Algorithm 1. **It is not a reproduction of the paper's experiments** and is not affiliated with the author or Google. The paper's larger setups (transformer sequence tasks, 28 DeepMind Control Suite environments at 10M steps) are not run here. Its MNIST diagnostic (Section 3) is run at the paper's configuration, with 30 seeds instead of 100 (result 7 below).
 
 ## The method in one paragraph
 
@@ -63,7 +63,7 @@ Everything runs on CPU. The bandit experiments need only NumPy and Matplotlib; t
 
 ## Results from this prototype
 
-All numbers come from `docs/results*.json`, produced by the scripts above. Seeds: 30 for the original bandit runs, 10 for the contextual task and the sweep, 20 for the continuous runs, 5 for MNIST. One configuration per setting, no tuning beyond the learning rates shown.
+All numbers come from `docs/results*.json`, produced by the scripts above. Seeds: 30 for the original bandit runs, 10 for the contextual task and the sweep, 20 for the continuous runs, 30 for the MNIST comparison (result 7) and 5 for the MNIST ablations (result 8). One configuration per setting, no tuning beyond the learning rates shown.
 
 | Setting | PG | DG (eta=1) | Takeaway |
 | --- | --- | --- | --- |
@@ -73,7 +73,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 | Synthetic contextual bandit | ~0.67 accuracy | ~0.67 (+0.002 to 0.007 over PG) | roughly tied, DG slightly ahead |
 | Eta/baseline sweep (normalized) | solves both scenarios | symmetric: robust; noisy: stall unless eta >= 4 | stall is in the gate, not the baseline |
 | Continuous 1-D bandit | identical at any reward scale | changes with reward scale; whitening fixes that | whitening makes eta unit-free, not faster |
-| MNIST contextual bandit (MLP) | 4.1% final test error | 3.4% (supervised CE: 2.9%) | DG ahead at every checkpoint; closes about 60% of PG's gap to CE |
+| MNIST contextual bandit (MLP) | 4.2% final test error | 3.6% (supervised CE: 2.9%) | DG ahead at every checkpoint; closes about 47% of PG's gap to CE (30 seeds) |
 | Noisy-reward stall mechanism (55 settings) | no interior fixed point, solves every setting | stalls at the gate's balance point | closed-form equation predicts the plateau in the noisy regime; large gaps escape |
 | Continuous 3-D bandit, per-dimension action scales | identical at every scale (final 1.000) | final 0.171 (w=0.02) to 0.342 (w=50); whitening does not fix it | scale offset in the log-density inverts or saturates the gate; only the sum of log-scales matters |
 
@@ -95,19 +95,19 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ![continuous whitening](docs/continuous_whitening.png)
 
-**7. MNIST as a one-step contextual bandit (`docs/mnist_curve.png`, 5 seeds).** This is the paper's own diagnostic (its Section 3), run at the paper's configuration: the learner sees an image, samples a digit from its policy, and gets reward 1 only if the sample is correct - the label is never revealed. Two-layer ReLU MLP (hidden width 100), Adam lr 1e-3, batches of 100, 10,000 episodes, constant baseline b = 0.5, eta = 1. The only deviation from the paper is 5 seeds instead of 100, and test error is measured on a fixed 2,000-image subset of the test set. Final test error: 3.4% (+- 0.1 SE) for DG, 4.1% (+- 0.1) for PG, 2.9% (+- 0.0) for supervised cross-entropy, which sees the labels and is only a reference. DG was below PG's mean at every checkpoint, and below PG on every individual seed at 10,000 episodes (2.9 to 3.8% versus 3.8 to 4.2%). DG closes about 60% of PG's gap to cross-entropy here; the paper reports roughly half over 100 seeds. Unlike the bandit settings above, this is the experiment the paper itself runs, so the agreement in direction is more meaningful than the exact numbers.
+**7. MNIST as a one-step contextual bandit (`docs/mnist_curve.png`, 30 seeds).** This is the paper's own diagnostic (its Section 3), run at the paper's configuration: the learner sees an image, samples a digit from its policy, and gets reward 1 only if the sample is correct - the label is never revealed. Two-layer ReLU MLP (hidden width 100), Adam lr 1e-3, batches of 100, 10,000 episodes, constant baseline b = 0.5, eta = 1. The only deviations from the paper are 30 seeds instead of 100 and test error measured on a fixed 2,000-image subset of the test set. The gate is applied as the paper's Algorithm 1 specifies, as a fixed per-sample coefficient (`detach_gate=True` in `dgplay/mnist.py`; an "autograd through the gate" variant that also differentiates through the gate is kept as a labelled ablation via `--gate autograd` - paired difference over 11 matched seeds -0.01 pp, 95% CI [-0.25, +0.24], no detected difference on this task). Final test error: 3.58% (+- 0.06 SEM) for DG, 4.21% (+- 0.06) for PG, 2.88% (+- 0.04) for supervised cross-entropy, which sees the labels and is only a reference. DG was below PG's mean at every checkpoint, and below PG on 29 of 30 seeds at 10,000 episodes (paired difference PG minus DG 0.63 pp, 95% CI [0.48, 0.78]). DG closes about 47% of PG's gap to cross-entropy here (bootstrap 95% CI [37%, 56%] over seeds); the paper reports roughly half over 100 seeds. Unlike the bandit settings above, this is the experiment the paper itself runs, so the agreement in direction is more meaningful than the exact numbers.
 
 ![MNIST curve](docs/mnist_curve.png)
 
-**8. MNIST ablations from the paper's Appendix B (`docs/mnist_ablations.svg`, 5 seeds).** Same setup as result 7, varying one factor at a time around the paper's configuration (`scripts/ablations_mnist.py`, per-run and aggregated numbers in `docs/results_mnist_ablations.json`).
+**8. MNIST ablations from the paper's Appendix B (`docs/mnist_ablations.svg`, 5 seeds).** Same setup as result 7, varying one factor at a time around the paper's configuration (`scripts/ablations_mnist.py`, per-run and aggregated numbers in `docs/results_mnist_ablations.json`). These runs use the corrected detached gate (result 7); the pre-fix autograd variant gave materially different batch-mean and entropy rows (DG 5.2% with batch-mean, 3.5% with entropy 0.1), which is why this ablation was re-run.
 
 | Ablation | PG | DG (eta=1) | Takeaway |
 | --- | --- | --- | --- |
-| Baseline b=0 vs 0.5 vs batch-mean | 5.8 / 4.1 / 5.4 | 4.1 / 3.4 / 5.2 | the paper's constant b=0.5 is best for both; b=0 hurts PG most (final errors 3.5 to 9.2% across seeds, a known high-variance case for REINFORCE without a baseline), DG degrades less |
-| 1 vs 4 vs 16 action samples per image | 4.1 / 3.7 / 3.5 | 3.4 / 3.4 / 3.5 | more samples help PG; DG at k=1 already matches PG at k=16 |
-| Entropy regularization 0 vs 0.01 vs 0.1 | 4.1 / 4.0 / 3.8 | 3.4 / 3.4 / 3.5 | little effect at 0.01; 0.1 helps PG slightly and does not help DG |
+| Baseline b=0 vs 0.5 vs batch-mean | 5.9 / 4.1 / 5.5 | 4.1 / 3.6 / 3.6 | b=0 hurts both and PG most (a known high-variance case for REINFORCE without a baseline); for DG, constant minus batch-mean is -0.07 +- 0.14 pp paired (5 seeds) |
+| 1 vs 4 vs 16 action samples per image | 4.1 / 3.8 / 3.6 | 3.6 / 3.3 / 3.4 | more samples help PG; DG at k=1 already matches PG at k=16 |
+| Entropy regularization 0 vs 0.01 vs 0.1 | 4.1 / 4.0 / 3.8 | 3.6 / 3.5 / 2.7 | little effect at 0.01; 0.1 lowers PG slightly and lowers DG by 0.85 +- 0.22 pp paired (5 seeds) |
 
-Final test errors in %, mean over 5 seeds (standard errors about 0.1, except 1.7 for PG with b=0). DG stays below PG in every configuration tried. All numbers are mean-of-5-seeds like result 7, not the paper's 100.
+Final test errors in %, mean over 5 seeds (standard errors about 0.1, except 1.7 for PG with b=0). DG stays below PG in every configuration tried. All numbers are mean-of-5-seeds, not the paper's 100.
 
 **9. The noisy-reward stall is the gate's interior balance point (`docs/stall_mechanism.png`, `scripts/stall_mechanism.py`; derivation in `dgplay/analysis.py`).** Result 5 left the mechanism open; for Bernoulli bandits it now has a closed form. Averaging the gate over the reward draw gives DG's expected per-visit coefficient on arm a: c(pi_a; p_a) = p_a(1-b)sigmoid((1-b)l_a/eta) - (1-p_a)b sigmoid(-b l_a/eta), with l_a = -log pi_a, and the expected direction is pi_a(c_a - sum_j pi_j c_j) (checked against exact enumeration and Monte Carlo in `tests/test_analysis.py`). PG is the same formula with the gate removed, c_a = p_a - b. DG's extra term is the direction bias of result 3, and at a matched baseline (b = p) it is p(1-p)[sigmoid(p l/eta) + sigmoid((1-p)l/eta) - 1] >= 0, larger for rarer arms - the general form of the old one-case unit test. Because c decreases as pi grows, an arm's probability rises only while its coefficient exceeds the probability-weighted mean, so the dynamics has an interior fixed point where all coefficients are equal. PG's coefficients do not depend on pi, so nothing balances below the optimum for it.
 
@@ -124,7 +124,7 @@ The paper's batch whitening of chi does not restore invariance here. Paired per-
 
 ## Limitations
 
-- The MNIST run uses 5 seeds (the paper uses 100) and evaluates on a 2,000-image test subset; everything else matches the paper's configuration. No continuous control.
+- The MNIST comparison uses 30 seeds and the MNIST ablations 5 seeds (the paper uses 100), and both evaluate on a 2,000-image test subset; everything else matches the paper's configuration. No continuous control.
 - The normalized-step bandit follows my reading of the paper's Section 4, not its exact protocol.
 - Small number of settings and seeds. Treat the comparisons as a study of behavior, not benchmarks.
 

@@ -25,17 +25,23 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "results_mnist"
 METHODS = ["ce", "pg", "dg"]
 
 
-def run_one(method: str, seed: int, episodes: int, eval_every: int) -> dict:
+def run_one(method: str, seed: int, episodes: int, eval_every: int, gate: str = "detach") -> dict:
     data = load_mnist()
-    r = train(method, *data, episodes=episodes, eval_every=eval_every, seed=seed)
+    r = train(method, *data, episodes=episodes, eval_every=eval_every, seed=seed,
+              detach_gate=(gate == "detach"))
     return r
 
 
-def aggregate(seeds: list[int]) -> dict:
+def run_name(method: str, gate: str) -> str:
+    # autograd-through-gate runs (the pre-fix behaviour) get their own file prefix
+    return f"{method}_gateautograd" if gate == "autograd" else method
+
+
+def aggregate(seeds: list[int], gate: str = "detach") -> dict:
     runs = {m: [] for m in METHODS}
     for m in METHODS:
         for s in seeds:
-            p = OUT_DIR / f"{m}_seed{s}.json"
+            p = OUT_DIR / f"{run_name(m, gate)}_seed{s}.json"
             if p.exists():
                 runs[m].append(json.loads(p.read_text()))
     if not any(runs.values()):
@@ -57,12 +63,13 @@ def aggregate(seeds: list[int]) -> dict:
     return summary
 
 
-def make_plot(summary: dict, path: Path):
+def make_plot(summary: dict, path: Path, gate: str = "detach"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    labels = {"ce": "CE (supervised, sees labels)", "pg": "PG (REINFORCE)", "dg": "DG (eta=1)"}
+    dg_label = "DG (eta=1, detached gate)" if gate == "detach" else "DG (eta=1, autograd through gate)"
+    labels = {"ce": "CE (supervised, sees labels)", "pg": "PG (REINFORCE)", "dg": dg_label}
     colors = {"ce": "gray", "pg": "tab:blue", "dg": "tab:red"}
     ep = np.array(summary["episodes"])
     fig, ax = plt.subplots(figsize=(7, 4.5))
@@ -76,7 +83,8 @@ def make_plot(summary: dict, path: Path):
         ax.fill_between(ep, mean - se, mean + se, color=colors[m], alpha=0.2, linewidth=0)
     ax.set_xlabel("episode (batch of 100)")
     ax.set_ylabel("test error (%)")
-    ax.set_title("MNIST as a one-step contextual bandit (mean +/- 1 SE over seeds)")
+    n = max(d["n_seeds"] for d in summary["methods"].values())
+    ax.set_title(f"MNIST as a one-step contextual bandit (mean +/- 1 SEM, n={n} seeds)")
     ax.legend()
     ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -92,23 +100,27 @@ def main():
     ap.add_argument("--episodes", type=int, default=10_000)
     ap.add_argument("--eval-every", type=int, default=200)
     ap.add_argument("--plot", action="store_true")
+    ap.add_argument("--gate", choices=["detach", "autograd"], default="detach",
+                    help="detach (default) implements the paper's Algorithm 1; "
+                         "autograd is the pre-fix variant kept as an ablation")
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if args.plot:
-        summary = aggregate(args.seeds)
-        out = Path(__file__).resolve().parent.parent / "docs" / "results_mnist.json"
+        summary = aggregate(args.seeds, gate=args.gate)
+        suffix = "_autogradgate" if args.gate == "autograd" else ""
+        out = Path(__file__).resolve().parent.parent / "docs" / f"results_mnist{suffix}.json"
         out.write_text(json.dumps(summary, indent=2))
         print(f"wrote {out}")
-        make_plot(summary, out.parent / "mnist_curve.png")
+        make_plot(summary, out.parent / f"mnist_curve{suffix}.png", gate=args.gate)
         for m, d in summary["methods"].items():
             print(f"{m:3s} final test err {d['final_test_err_mean']*100:.2f}% "
                   f"+/- {d['final_test_err_se']*100:.2f} (seeds={d['n_seeds']})")
         return
     if args.method is None:
         ap.error("--method is required unless --plot")
-    r = run_one(args.method, args.seed, args.episodes, args.eval_every)
-    p = OUT_DIR / f"{args.method}_seed{args.seed}.json"
+    r = run_one(args.method, args.seed, args.episodes, args.eval_every, gate=args.gate)
+    p = OUT_DIR / f"{run_name(args.method, args.gate)}_seed{args.seed}.json"
     p.write_text(json.dumps({k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in r.items()}))
     print(f"wrote {p}  final test err {r['final_test_err']*100:.2f}%")
 

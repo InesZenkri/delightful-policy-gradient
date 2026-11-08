@@ -78,10 +78,35 @@ def build_policy(width: int = 100, seed: int = 0):
     )
 
 
+
+def gated_loss(log_pi, actions, U, eta: float = 1.0, detach_gate: bool = True):
+    """DG loss for one batch: -(w * U * log pi(A)).mean(), w = sigmoid(chi / eta).
+
+    log_pi: (batch, K) log-probabilities; actions: (batch, k) sampled actions;
+    U: (batch, k) or broadcastable advantages.
+
+    Paper Algorithm 1 (arXiv:2603.14608) uses the gate as a per-sample coefficient:
+    the update is w * U * grad log pi(A). detach_gate=True (default) stops the gradient
+    at chi so autograd implements exactly that. detach_gate=False keeps the earlier
+    behaviour (gradient flows through the gate), which adds an unintended term
+    U^2 * l * w(1-w)/eta * grad log pi(A); kept only as the labelled ablation
+    "autograd through the gate".
+    """
+    import torch
+
+    log_pi_a = torch.gather(log_pi, 1, actions)
+    surprisal = -log_pi_a
+    chi = U * surprisal
+    if detach_gate:
+        chi = chi.detach()
+    w = torch.sigmoid(chi / eta)
+    return -(w * U * log_pi_a).mean()
+
 def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 100,
           lr: float = 1e-3, eta: float = 1.0, baseline: str = "constant",
           n_samples: int = 1, entropy_coef: float = 0.0,
-          width: int = 100, seed: int = 0, eval_every: int = 200, eval_n: int = 2_000):
+          width: int = 100, seed: int = 0, eval_every: int = 200, eval_n: int = 2_000,
+          detach_gate: bool = True):
     """Train one method on the MNIST contextual bandit. Returns a dict of histories.
 
     eval_every: episodes between evaluations. eval_n: size of the held-out subset used
@@ -91,6 +116,9 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
     batch_mean then averages rewards over all samples). entropy_coef: entropy
     regularization weight for pg/dg (loss -= entropy_coef * H(pi); the paper's
     Appendix B comparison). Both leave the ce oracle unchanged.
+    detach_gate: stop the gradient at the delight chi before gating, so DG matches
+    the paper's Algorithm 1 (gate as a fixed coefficient). False reproduces the
+    pre-fix behaviour as the "autograd through the gate" ablation. Affects dg only.
     """
     import torch
 
@@ -127,13 +155,10 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
             else:
                 b = float(r.mean())
             U = r - b
-            log_pi_a = torch.gather(log_pi, 1, a)
             if method == "dg":
-                surprisal = -log_pi_a
-                chi = U * surprisal
-                w = torch.sigmoid(chi / eta)
-                loss = -(w * U * log_pi_a).mean()
+                loss = gated_loss(log_pi, a, U, eta=eta, detach_gate=detach_gate)
             else:
+                log_pi_a = torch.gather(log_pi, 1, a)
                 loss = -(U * log_pi_a).mean()
             if entropy_coef:
                 ent = -(pi * log_pi).sum(1).mean()
@@ -163,4 +188,5 @@ def train(method: str, Xtr, ytr, Xte, yte, episodes: int = 10_000, batch: int = 
         "n_samples": n_samples,
         "entropy_coef": entropy_coef,
         "eta": eta,
+        "detach_gate": detach_gate,
     }
