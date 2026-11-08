@@ -138,12 +138,12 @@ def stall_equilibrium(k: int, p_rest: float, gap: float, eta: float = 1.0,
     for x in grid:
         fx = f(x)
         if prev_f > 0 >= fx:
-            a, b_, fa, fb = prev_x, x, prev_f, fx
+            a, b_, fa, _fb = prev_x, x, prev_f, fx
             for _ in range(200):
                 m = 0.5 * (a + b_)
                 fm = f(m)
                 if fa > 0 >= fm:
-                    b_, fb = m, fm
+                    b_, _fb = m, fm
                 else:
                     a, fa = m, fm
                 if b_ - a < tol:

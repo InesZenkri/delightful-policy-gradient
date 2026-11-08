@@ -51,38 +51,43 @@ def run_cfg(scen, method, eta=None, decay=0.9, whiten=False):
                                              if any(t is not None for t in t90) else None)}
 
 
-out, grids = {}, {}
-for scen in SCENARIOS:
-    grid = np.zeros((len(DECAYS), len(ETAS)))
-    for i, d in enumerate(DECAYS):
-        out[f"{scen}|pg|decay={d}"] = run_cfg(scen, "pg", decay=d)
-        out[f"{scen}|dg_whitened|eta=1|decay={d}"] = run_cfg(scen, "dg", eta=1.0, decay=d, whiten=True)
-        for k, e in enumerate(ETAS):
-            r = run_cfg(scen, "dg", eta=e, decay=d)
-            out[f"{scen}|dg|eta={e}|decay={d}"] = r
-            # final error is 0 everywhere in symmetric; use run-average there
-            grid[i, k] = r["final_mean"] if scen == "noisy_20arm" else r["mean_over_run"]
-    grids[scen] = grid
+def main():
+    out, grids = {}, {}
+    for scen in SCENARIOS:
+        grid = np.zeros((len(DECAYS), len(ETAS)))
+        for i, d in enumerate(DECAYS):
+            out[f"{scen}|pg|decay={d}"] = run_cfg(scen, "pg", decay=d)
+            out[f"{scen}|dg_whitened|eta=1|decay={d}"] = run_cfg(scen, "dg", eta=1.0, decay=d, whiten=True)
+            for k, e in enumerate(ETAS):
+                r = run_cfg(scen, "dg", eta=e, decay=d)
+                out[f"{scen}|dg|eta={e}|decay={d}"] = r
+                # final error is 0 everywhere in symmetric; use run-average there
+                grid[i, k] = r["final_mean"] if scen == "noisy_20arm" else r["mean_over_run"]
+        grids[scen] = grid
 
-fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
-for ax, (scen, grid) in zip(axes, grids.items()):
-    im = ax.imshow(grid, aspect="auto", cmap="viridis_r")
-    ax.set_xticks(range(len(ETAS)), [str(e) for e in ETAS])
-    ax.set_yticks(range(len(DECAYS)), [str(d) for d in DECAYS])
-    ax.set_xlabel("eta"); ax.set_ylabel("baseline EMA decay")
-    for i in range(len(DECAYS)):
-        for k in range(len(ETAS)):
-            ax.text(k, i, f"{grid[i, k]:.3f}", ha="center", va="center", fontsize=8,
-                    color="white" if grid[i, k] < grid.max() * 0.7 else "black")
-    fld = "final_mean" if scen == "noisy_20arm" else "mean_over_run"
-    pg_ref = "; ".join(f"{d}: {out[f'{scen}|pg|decay={d}'][fld]:.3f}" for d in DECAYS)
-    wh_ref = "; ".join(f"{d}: {out[f'{scen}|dg_whitened|eta=1|decay={d}'][fld]:.3f}" for d in DECAYS)
-    ax.set_title(f"{scen}: DG grid (10 seeds)\nPG by decay - {pg_ref}\nDG whitened eta=1 - {wh_ref}",
-                 fontsize=7.5)
-    fig.colorbar(im, ax=ax)
-fig.suptitle("Normalized steps. Metric: mean error over run (symmetric) / final expected regret (noisy_20arm), mean over seeds")
-fig.tight_layout()
-fig.savefig("docs/sweep_eta_baseline.png", dpi=110)
-json.dump(out, open("docs/results_sweep.json", "w"), indent=1)
-for k, v in out.items():
-    print(f"{k:42s} final={v['final_mean']:.4f}±{v['final_sem']:.4f} avg={v['mean_over_run']:.4f}")
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    for ax, (scen, grid) in zip(axes, grids.items()):
+        im = ax.imshow(grid, aspect="auto", cmap="viridis_r")
+        ax.set_xticks(range(len(ETAS)), [str(e) for e in ETAS])
+        ax.set_yticks(range(len(DECAYS)), [str(d) for d in DECAYS])
+        ax.set_xlabel("eta"); ax.set_ylabel("baseline EMA decay")
+        for i in range(len(DECAYS)):
+            for k in range(len(ETAS)):
+                ax.text(k, i, f"{grid[i, k]:.3f}", ha="center", va="center", fontsize=8,
+                        color="white" if grid[i, k] < grid.max() * 0.7 else "black")
+        fld = "final_mean" if scen == "noisy_20arm" else "mean_over_run"
+        pg_ref = "; ".join(f"{d}: {out[f'{scen}|pg|decay={d}'][fld]:.3f}" for d in DECAYS)
+        wh_ref = "; ".join(f"{d}: {out[f'{scen}|dg_whitened|eta=1|decay={d}'][fld]:.3f}" for d in DECAYS)
+        ax.set_title(f"{scen}: DG grid (10 seeds)\nPG by decay - {pg_ref}\nDG whitened eta=1 - {wh_ref}",
+                     fontsize=7.5)
+        fig.colorbar(im, ax=ax)
+    fig.suptitle("Normalized steps. Metric: mean error over run (symmetric) / final expected regret (noisy_20arm), mean over seeds")
+    fig.tight_layout()
+    fig.savefig("docs/sweep_eta_baseline.png", dpi=110)
+    json.dump(out, open("docs/results_sweep.json", "w"), indent=1)
+    for k, v in out.items():
+        print(f"{k:42s} final={v['final_mean']:.4f}±{v['final_sem']:.4f} avg={v['mean_over_run']:.4f}")
+
+
+if __name__ == "__main__":
+    main()

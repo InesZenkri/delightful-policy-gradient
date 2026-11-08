@@ -1,0 +1,2 @@
+# Lint only for real defects (pyflakes): no style-only reformatting.
+lint.select = ["F"]
