@@ -32,6 +32,7 @@ A rare action with positive advantage (a "breakthrough") keeps almost its full w
 | `scripts/make_demo.py` | Side-by-side animated demo (`docs/demo.gif`) |
 | `scripts/compare.py` | Multi-seed PG vs DG over three bandit settings, optionally with normalized steps |
 | `scripts/symmetric_normalized.py` | One-correct-arm bandit with normalized steps (my reading of the paper's symmetric-bandit setup) |
+| `scripts/lr_tuning_symmetric.py` | Per-method step-size sweep for the symmetric bandit: DG's faster convergence is not a tuning artifact |
 | `scripts/compare_contextual.py` | PG vs DG vs supervised cross-entropy on the synthetic contextual bandit |
 | `scripts/sweep_eta_baseline.py` | Sweep of DG's temperature eta and the EMA baseline strength in two bandit settings |
 | `scripts/stall_mechanism.py` | Tests whether the derived gate balance equation predicts the noisy-reward stall across 55+ settings |
@@ -48,6 +49,7 @@ pip install -r requirements.txt
 python -m pytest -q
 PYTHONPATH=. python scripts/make_demo.py            # writes docs/demo.gif
 PYTHONPATH=. python scripts/symmetric_normalized.py
+PYTHONPATH=. python scripts/lr_tuning_symmetric.py   # about 20 s on a CPU
 PYTHONPATH=. python scripts/compare.py              # about 40 s on a CPU
 PYTHONPATH=. python scripts/compare.py --normalize
 PYTHONPATH=. python scripts/compare_contextual.py
@@ -79,7 +81,7 @@ All numbers come from `docs/results*.json`, produced by the scripts above. Seeds
 
 ![Demo](docs/demo_final.png)
 
-**1. Symmetric bandit with normalized steps (K=100, one correct arm, B=100, alpha=0.1, fixed baseline 0.5).** DG gets to error below 0.1 at step 74 versus step 101 for PG (mean over 30 seeds). This matches the direction of the paper's claim that DG converges faster at equal step size. ![symmetric](docs/symmetric_normalized.png)
+**1. Symmetric bandit with normalized steps (K=100, one correct arm, B=100, alpha=0.1, fixed baseline 0.5).** DG gets to error below 0.1 at step 74 versus step 101 for PG (mean over 30 seeds). This matches the direction of the paper's claim that DG converges faster at equal step size. A per-method step-size sweep (`scripts/lr_tuning_symmetric.py`, 30 seeds, `docs/lr_tuning_symmetric.png`) probes whether the alpha = 0.1 headline depends on the step-size choice: DG crosses the threshold about 25-30% sooner at every matched alpha from 0.05 to 1.6 (201 vs 146 at 0.05, 101 vs 74 at 0.1, 52 vs 37 at 0.2, 26 vs 19 at 0.4, 14 vs 10 at 0.8, 8 vs 6 at 1.6). With normalized steps neither method has an interior best alpha - larger steps converge monotonically faster until the crossing lands inside the 2-to-3-step measurement floor (alpha >= 3.2) - so the comparison is reported across the grid, not at a tuned best per method. ![symmetric](docs/symmetric_normalized.png)
 
 **2. Noisy Bernoulli bandits, un-normalized steps.** DG was slower than PG in all three settings and all learning rates I tried (`docs/compare.png`). Part of this is that the gate is near 0.5 for most samples, so DG takes smaller steps. That is a step-size effect, not evidence about direction.
 

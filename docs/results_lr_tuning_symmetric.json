@@ -1,0 +1,120 @@
+{
+ "K": 100,
+ "B": 100,
+ "steps": 300,
+ "n_seeds": 30,
+ "threshold": 0.1,
+ "alphas": [
+  0.05,
+  0.1,
+  0.2,
+  0.4,
+  0.8,
+  1.6,
+  3.2
+ ],
+ "methods": {
+  "pg": [
+   {
+    "alpha": 0.05,
+    "first_step_below_threshold": 201,
+    "err_at_100": 0.9334230904552621,
+    "err_final_mean": 0.0009894723706751595,
+    "err_final_se": 3.1601228836705754e-05
+   },
+   {
+    "alpha": 0.1,
+    "first_step_below_threshold": 101,
+    "err_at_100": 0.10752820125853169,
+    "err_final_mean": 3.209146652120391e-10,
+    "err_final_se": 1.5612073269086977e-11
+   },
+   {
+    "alpha": 0.2,
+    "first_step_below_threshold": 52,
+    "err_at_100": 7.63849030158692e-06,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 0.4,
+    "first_step_below_threshold": 26,
+    "err_at_100": 1.712704052655075e-14,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 0.8,
+    "first_step_below_threshold": 14,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 1.6,
+    "first_step_below_threshold": 8,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 3.2,
+    "first_step_below_threshold": 5,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   }
+  ],
+  "dg": [
+   {
+    "alpha": 0.05,
+    "first_step_below_threshold": 146,
+    "err_at_100": 0.5244818930074773,
+    "err_final_mean": 5.056895849767281e-05,
+    "err_final_se": 1.1930187962596942e-06
+   },
+   {
+    "alpha": 0.1,
+    "first_step_below_threshold": 74,
+    "err_at_100": 0.007404989790139123,
+    "err_final_mean": 1.538992637032758e-11,
+    "err_final_se": 5.280997051727622e-13
+   },
+   {
+    "alpha": 0.2,
+    "first_step_below_threshold": 37,
+    "err_at_100": 3.4199065142015427e-07,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 0.4,
+    "first_step_below_threshold": 19,
+    "err_at_100": 5.699144859742471e-16,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 0.8,
+    "first_step_below_threshold": 10,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 1.6,
+    "first_step_below_threshold": 6,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   },
+   {
+    "alpha": 3.2,
+    "first_step_below_threshold": 4,
+    "err_at_100": 0.0,
+    "err_final_mean": 0.0,
+    "err_final_se": 0.0
+   }
+  ]
+ }
+}
