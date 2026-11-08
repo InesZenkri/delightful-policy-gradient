@@ -1,5 +1,5 @@
 import numpy as np
-from dgplay import softmax, dg_direction, run_agent
+from dgplay import softmax, run_agent
 from dgplay.bandit import grad_log_pi
 from dgplay.analysis import (sigmoid, visit_coefficient, direction_bias,
                              expected_direction, simulate_expected,

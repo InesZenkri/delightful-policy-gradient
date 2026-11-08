@@ -195,3 +195,64 @@ def test_load_mnist_download_timeout(tmp_path, monkeypatch):
     assert calls["timeout"] == mn.DOWNLOAD_TIMEOUT
     assert not list(tmp_path.rglob("*.part"))
     assert not list(tmp_path.rglob("*.gz"))
+
+def _manual_dg_grad(logits, actions, U, eta, through_gate):
+    """Closed-form gradient of the DG loss w.r.t. logits (batch mean, k=1).
+
+    Detached gate (paper Algorithm 1): coefficient w*U.
+    Autograd through the gate (pre-fix): coefficient w*U - U^2 * log pi(A) * w(1-w)/eta.
+    """
+    B, K = logits.shape
+    pi = torch.softmax(logits, dim=1)
+    lp_a = log_pi = None
+    log_pi = torch.log_softmax(logits, dim=1)
+    lp_a = log_pi[torch.arange(B), actions]
+    w = torch.sigmoid(U * (-lp_a) / eta)
+    coef = U * w
+    if through_gate:
+        coef = coef - U**2 * lp_a * w * (1 - w) / eta
+    onehot = torch.zeros_like(logits)
+    onehot[torch.arange(B), actions] = 1.0
+    return -(coef.unsqueeze(1) * (onehot - pi)) / B
+
+
+def test_detached_gate_gradient_matches_algorithm1():
+    # The default loss must give exactly w * U * grad log pi(A) per sample:
+    # the gradient autograd computes must equal the closed form with a fixed gate.
+    from dgplay.mnist import gated_loss
+    torch.manual_seed(0)
+    B, K = 64, 10
+    logits = torch.randn(B, K, dtype=torch.float64, requires_grad=True)
+    actions = torch.randint(0, K, (B,))
+    U = torch.randint(0, 2, (B,), dtype=torch.float64) - 0.5  # rewards 0/1 minus b=0.5
+    loss = gated_loss(torch.log_softmax(logits, 1), actions.unsqueeze(1), U.unsqueeze(1), eta=1.0)
+    (g,) = torch.autograd.grad(loss, logits)
+    expected = _manual_dg_grad(logits.detach(), actions, U, eta=1.0, through_gate=False)
+    assert torch.allclose(g, expected, atol=1e-12)
+
+
+def test_autograd_through_gate_variant_matches_its_closed_form():
+    # The pre-fix variant (kept as the "autograd through the gate" ablation) adds the
+    # term -U^2 * log pi(A) * w(1-w)/eta per sample; pin both that it differs from
+    # Algorithm 1 and that it equals its own closed form.
+    from dgplay.mnist import gated_loss
+    torch.manual_seed(1)
+    B, K = 64, 10
+    logits = torch.randn(B, K, dtype=torch.float64, requires_grad=True)
+    actions = torch.randint(0, K, (B,))
+    U = torch.randint(0, 2, (B,), dtype=torch.float64) - 0.5
+    loss = gated_loss(torch.log_softmax(logits, 1), actions.unsqueeze(1), U.unsqueeze(1),
+                      eta=1.0, detach_gate=False)
+    (g,) = torch.autograd.grad(loss, logits)
+    expected = _manual_dg_grad(logits.detach(), actions, U, eta=1.0, through_gate=True)
+    assert torch.allclose(g, expected, atol=1e-12)
+    algo1 = _manual_dg_grad(logits.detach(), actions, U, eta=1.0, through_gate=False)
+    assert not torch.allclose(g, algo1, atol=1e-6)
+
+
+def test_train_dg_detaches_gate_by_default():
+    # train(..., "dg") defaults to the Algorithm 1 (detached) gate and records the choice.
+    X, y = _toy_data(n=64)
+    kw = dict(episodes=5, batch=16, eval_every=5, eval_n=64)
+    assert train("dg", X, y, X, y, seed=0, **kw)["detach_gate"] is True
+    assert train("dg", X, y, X, y, seed=0, detach_gate=False, **kw)["detach_gate"] is False
